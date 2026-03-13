@@ -1,0 +1,35 @@
+﻿services:
+  - type: web
+    name: saloum-market-api
+    runtime: docker
+    rootDir: .
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_URL
+        sync: false
+      - key: ASSET_URL
+        sync: false
+      - key: APP_KEY
+        sync: false
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_URL
+        fromDatabase:
+          name: saloum-market-db
+          property: connectionString
+      - key: FRONTEND_URLS
+        sync: false
+      - key: FILESYSTEM_DISK
+        value: public
+      - key: RUN_MIGRATIONS
+        value: "true"
+    disk:
+      name: storage
+      mountPath: /var/www/html/storage
+      sizeGB: 10
+
+databases:
+  - name: saloum-market-db
