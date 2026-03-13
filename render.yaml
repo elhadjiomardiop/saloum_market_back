@@ -1,6 +1,6 @@
-﻿services:
+services:
   - type: web
-    name: saloum-market-api
+    name: mini-market-backend
     runtime: docker
     rootDir: .
     envVars:
@@ -10,26 +10,15 @@
         value: "false"
       - key: APP_URL
         sync: false
-      - key: ASSET_URL
-        sync: false
       - key: APP_KEY
         sync: false
-      - key: DB_CONNECTION
-        value: pgsql
-      - key: DB_URL
-        fromDatabase:
-          name: saloum-market-db
-          property: connectionString
       - key: FRONTEND_URLS
         sync: false
+      - key: DB_CONNECTION
+        value: sqlite
+      - key: DB_DATABASE
+        value: /var/www/html/database/database.sqlite
       - key: FILESYSTEM_DISK
         value: public
       - key: RUN_MIGRATIONS
         value: "true"
-    disk:
-      name: storage
-      mountPath: /var/www/html/storage
-      sizeGB: 10
-
-databases:
-  - name: saloum-market-db
