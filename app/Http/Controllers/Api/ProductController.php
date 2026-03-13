@@ -3,71 +3,110 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Product;
+use App\Models\Store;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
 {
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function products(): array
-    {
-        return [
-            [
-                'id' => 'prod_1',
-                'name' => 'Modern table lamp',
-                'description' => 'Modern table lamp with a sleek design.',
-                'category' => 'Decoration',
-                'mrp' => 40,
-                'price' => 29,
-                'inStock' => true,
-                'ratingCount' => 6,
-            ],
-            [
-                'id' => 'prod_2',
-                'name' => 'Smart speaker gray',
-                'description' => 'Smart speaker with a sleek design.',
-                'category' => 'Speakers',
-                'mrp' => 50,
-                'price' => 29,
-                'inStock' => true,
-                'ratingCount' => 6,
-            ],
-            [
-                'id' => 'prod_3',
-                'name' => 'Wireless headphones',
-                'description' => 'Wireless headphones with a sleek design.',
-                'category' => 'Headphones',
-                'mrp' => 70,
-                'price' => 29,
-                'inStock' => true,
-                'ratingCount' => 6,
-            ],
-        ];
-    }
-
     public function index(): JsonResponse
     {
+        $products = Product::query()
+            ->where('is_active', true)
+            ->whereHas('store', fn ($q) => $q->where('is_active', true))
+            ->with('store')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (Product $product) => $this->transformProduct($product));
+
         return response()->json([
-            'data' => $this->products(),
+            'data' => $products,
             'meta' => [
-                'count' => count($this->products()),
+                'count' => $products->count(),
             ],
         ]);
     }
 
     public function show(string $id): JsonResponse
     {
-        $product = collect($this->products())->firstWhere('id', $id);
+        $product = Product::with('store')->find($id);
 
         if (! $product) {
             return response()->json([
-                'message' => 'Product not found',
+                'message' => 'Produit introuvable',
             ], 404);
         }
 
         return response()->json([
-            'data' => $product,
+            'data' => $this->transformProduct($product),
         ]);
+    }
+
+    public function storeProducts(Request $request, string $username): JsonResponse
+    {
+        $store = Store::query()->where('username', $username)->first();
+
+        if (! $store) {
+            return response()->json([
+                'message' => 'Boutique introuvable',
+            ], 404);
+        }
+
+        $products = Product::query()
+            ->where('store_id', $store->id)
+            ->where('is_active', true)
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (Product $product) => $this->transformProduct($product, $store));
+
+        return response()->json([
+            'data' => $products,
+            'meta' => [
+                'count' => $products->count(),
+            ],
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function transformProduct(Product $product, ?Store $store = null): array
+    {
+        $store = $store ?: $product->store;
+
+        return [
+            'id' => (string) $product->id,
+            'name' => $product->name,
+            'description' => $product->description,
+            'category' => $product->category,
+            'mrp' => (float) $product->mrp,
+            'price' => (float) $product->price,
+            'images' => $this->formatImages($product->images ?? []),
+            'inStock' => (bool) $product->is_active,
+            'rating' => [],
+            'store' => $store ? [
+                'id' => $store->id,
+                'name' => $store->name,
+                'username' => $store->username,
+                'logo' => $store->logo_path ? Storage::disk('public')->url($store->logo_path) : null,
+            ] : null,
+            'createdAt' => $product->created_at?->toISOString(),
+        ];
+    }
+
+    /**
+     * @param  array<int, string> $images
+     * @return array<int, string>
+     */
+    private function formatImages(array $images): array
+    {
+        return array_values(array_filter(array_map(function ($path) {
+            if (! $path) {
+                return null;
+            }
+            return str_starts_with($path, 'http') ? $path : Storage::disk('public')->url($path);
+        }, $images)));
     }
 }

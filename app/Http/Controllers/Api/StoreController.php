@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Order;
+use App\Models\Product;
 use App\Models\Store;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,11 +16,15 @@ class StoreController extends Controller
     public function vendorDashboard(Request $request): JsonResponse
     {
         $store = Store::where('user_id', $request->user()->id)->first();
+        $storeId = $store?->id;
+        $totalProducts = $storeId ? Product::where('store_id', $storeId)->count() : 0;
+        $totalOrders = $storeId ? Order::where('store_id', $storeId)->count() : 0;
+        $totalEarnings = $storeId ? (float) Order::where('store_id', $storeId)->sum('total') : 0;
 
         return response()->json([
-            'totalProducts' => 0,
-            'totalEarnings' => 0,
-            'totalOrders' => 0,
+            'totalProducts' => $totalProducts,
+            'totalEarnings' => $totalEarnings,
+            'totalOrders' => $totalOrders,
             'ratings' => [],
             'store' => $store ? $this->transformStore($store) : null,
         ]);
@@ -30,6 +36,21 @@ class StoreController extends Controller
 
         return response()->json([
             'data' => $store ? $this->transformStore($store) : null,
+        ]);
+    }
+
+    public function publicStore(string $username): JsonResponse
+    {
+        $store = Store::where('username', $username)->first();
+
+        if (! $store) {
+            return response()->json([
+                'message' => 'Boutique introuvable',
+            ], 404);
+        }
+
+        return response()->json([
+            'data' => $this->transformStore($store),
         ]);
     }
 
@@ -70,14 +91,12 @@ class StoreController extends Controller
                 'contact' => $validated['contact'],
                 'address' => $validated['address'],
                 'logo_path' => $logoPath,
-                'status' => 'pending',
-                'is_active' => false,
-                'reviewed_by' => null,
-                'reviewed_at' => null,
+                'status' => 'approved',
+                'is_active' => true,
             ]);
 
             return response()->json([
-                'message' => 'Votre demande de mise a jour de boutique a ete envoyee.',
+                'message' => 'Boutique mise a jour et activee.',
                 'data' => $this->transformStore($existing->fresh()->load('user')),
             ]);
         }
@@ -91,12 +110,12 @@ class StoreController extends Controller
             'contact' => $validated['contact'],
             'address' => $validated['address'],
             'logo_path' => $logoPath,
-            'status' => 'pending',
-            'is_active' => false,
+            'status' => 'approved',
+            'is_active' => true,
         ])->load('user');
 
         return response()->json([
-            'message' => 'Votre demande de creation a ete envoyee.',
+            'message' => 'Votre boutique est active.',
             'data' => $this->transformStore($store),
         ], 201);
     }
@@ -158,12 +177,6 @@ class StoreController extends Controller
 
     public function toggleStoreActive(Store $store): JsonResponse
     {
-        if ($store->status !== 'approved') {
-            return response()->json([
-                'message' => 'Seules les boutiques approuvees peuvent etre activees.',
-            ], 422);
-        }
-
         $store->update([
             'is_active' => ! $store->is_active,
         ]);
